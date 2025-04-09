@@ -47,3 +47,49 @@ export const signin = async (req, res, next) => {
         next(error);
     }
 };
+
+export const google = async (req, res, next) => {
+    try {
+        const user = await User.findOne({ email: req.body.email });
+
+        if (user) {
+            // If user exists, generate JWT token
+            const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+            // Destructure the user object and exclude the password
+            const { password: pass, ...rest } = user._doc;
+
+            // Send the token in a cookie and return the user data
+            res.cookie('access_token', token, { httpOnly: true })
+                .status(200)
+                .json({ ...rest });
+        } else {
+            // If user doesn't exist, create a new user
+            const generatedPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+            const hashedPassword = bcryptjs.hashSync(generatedPassword);
+
+            const newUser = new User({
+                userName: req.body.name.split(" ").join("").toLowerCase() + Math.random().toString(36).slice(-4),
+                email: req.body.email,
+                password: hashedPassword,
+                avatar: req.body.photo
+            });
+
+            // Save the new user to the database
+            await newUser.save();
+
+            // Generate a JWT token for the new user
+            const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+            // Destructure the new user object and exclude the password
+            const { password: pass, ...rest } = newUser._doc;
+
+            // Send the token in a cookie and return the user data
+            res.cookie('access_token', token, { httpOnly: true })
+                .status(200)
+                .json({ ...rest });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
